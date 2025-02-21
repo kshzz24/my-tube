@@ -7,7 +7,7 @@ import { Suspense, useState } from "react";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ErrorBoundary } from "react-error-boundary";
-
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Form,
   FormControl,
@@ -29,7 +29,8 @@ import {
   ImagePlusIcon,
   LockIcon,
   MoreVerticalIcon,
-  RotateCcwIcon, TrashIcon
+  RotateCcwIcon,
+  TrashIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -55,13 +56,92 @@ interface FormSectionProps {
 }
 export const FormSection = ({ videoId }: FormSectionProps) => {
   return (
-    <Suspense fallback={<p>Loading....</p>}>
+    <Suspense fallback={<FormSectionSkeleton />}>
       <ErrorBoundary fallback={<p>Error...</p>}>
         <FormSectionSuspense videoId={videoId} />
       </ErrorBoundary>
     </Suspense>
   );
 };
+
+const FormSectionSkeleton = () => {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <Skeleton className="h-8 w-32 mb-1" />
+          <Skeleton className="h-4 w-40" />
+        </div>
+        <div className="flex items-center gap-x-2">
+          <Skeleton className="h-9 w-16" />
+          <Skeleton className="h-9 w-9" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        <div className="space-y-8 lg:col-span-3">
+          {/* Title field */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+
+          {/* Description field */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-[160px] w-full" />
+          </div>
+
+          {/* Thumbnail field */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-[184px] w-[250px]" />
+          </div>
+
+          {/* Category field */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-y-8 lg:col-span-2">
+          {/* Video preview card */}
+          <div className="flex flex-col gap-4 bg-[#f9f9f9] rounded-xl overflow-hidden">
+            <Skeleton className="aspect-video w-full" />
+            <div className="p-4 flex flex-col gap-y-6">
+              <div className="flex justify-between items-center">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-48" />
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Visibility field */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const FormSectionSuspense = ({ videoId }: FormSectionProps) => {
   const [video] = trpc.studio.getOne.useSuspenseQuery({ id: videoId });
   const router = useRouter();
