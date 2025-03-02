@@ -1,5 +1,6 @@
 import { db } from "@/db";
 import {
+  subscriptions,
   users,
   videoReactions,
   videos,
@@ -13,7 +14,7 @@ import {
   protectedProcedure,
 } from "@/trpc/init";
 import { TRPCError } from "@trpc/server";
-import { and, eq, getTableColumns, inArray } from "drizzle-orm";
+import { and, eq, getTableColumns, inArray, isNotNull } from "drizzle-orm";
 import { UTApi } from "uploadthing/server";
 import { z } from "zod";
 
@@ -44,17 +45,30 @@ export const videosRouter = createTRPCRouter({
           })
           .from(videoReactions)
           .where(inArray(videoReactions.userId, userId ? [userId] : []))
+        // to get authorize and unauthorize users
       );
 
       // It only includes reactions from the current user for all the videos that the current user has given
       // If userId exists, it filters to only show that user's reactions; otherwise, it returns an empty set.
 
+      const viewerSubscriptions = db.$with("viewer_subscriptions").as(
+        db
+          .select()
+          .from(subscriptions)
+          .where(inArray(subscriptions.viewerId, userId ? [userId] : []))
+      );
+
       const [existingVideo] = await db
-        .with(viewerReactions)
+        .with(viewerReactions, viewerSubscriptions)
         .select({
           ...getTableColumns(videos),
           user: {
             ...getTableColumns(users),
+
+            subscriberCount: db.$count(subscriptions, eq(subscriptions.creatorId, users.id)),
+            viewerSubscribed: isNotNull(viewerSubscriptions.viewerId).mapWith(
+              Boolean
+            ),
           },
           // ek schema h jph video h, dusra schema ek view ka h isme saare views h aur uss schema , har video ki id h
           // is video id ke coressponding kitne views h unke rows ka count which is a number
@@ -79,6 +93,10 @@ export const videosRouter = createTRPCRouter({
         .from(videos)
         .innerJoin(users, eq(videos.userId, users.id))
         .leftJoin(viewerReactions, eq(viewerReactions.videoId, videos.id))
+        .leftJoin(
+          viewerSubscriptions,
+          eq(viewerSubscriptions.creatorId, users.id)
+        )
         .where(eq(videos.id, input.id));
       // .groupBy(videos.id, users.id, viewerReactions.type);
 
