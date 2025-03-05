@@ -2,9 +2,14 @@
 
 import { DEFAULT_LIMIT } from "@/constants";
 import { trpc } from "@/trpc/client";
-import { VideoRowCard } from "../components/video-row-card";
-import { VideoGridCard } from "../components/video-grid-card";
+import { VideoCardSkeleton, VideoRowCard } from "../components/video-row-card";
+import {
+  VideoGridCard,
+  VideoGridCardSkeleton,
+} from "../components/video-grid-card";
 import { InfiniteScroll } from "@/components/infinite-scroll";
+import { Suspense } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 
 interface SuggestionSectionProps {
   videoId: string;
@@ -12,6 +17,36 @@ interface SuggestionSectionProps {
 }
 
 export const SuggestionsSection = ({
+  videoId,
+  isManual,
+}: SuggestionSectionProps) => {
+  return (
+    <Suspense fallback={<SuggestionsSectionSkeleton />}>
+      <ErrorBoundary fallback={<p>Error...</p>}>
+        <SuggestionsSectionSuspense videoId={videoId} isManual={isManual} />
+      </ErrorBoundary>
+    </Suspense>
+  );
+};
+
+const SuggestionsSectionSkeleton = () => {
+  return (
+    <>
+      <div className="hidden mb:block space-y-3">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <VideoCardSkeleton key={index} size={"compact"} />
+        ))}
+      </div>
+      <div className="block md:hidden space-y-10">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <VideoGridCardSkeleton key={index} />
+        ))}
+      </div>
+    </>
+  );
+};
+
+export const SuggestionsSectionSuspense = ({
   videoId,
   isManual,
 }: SuggestionSectionProps) => {
