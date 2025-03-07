@@ -137,7 +137,7 @@ export const videosRouter = createTRPCRouter({
       if (!asset) {
         throw new TRPCError({ code: "BAD_REQUEST" });
       }
-      
+
       const duration = asset.duration ? Math.round(asset.duration * 1000) : 0;
       const playbackId = asset.playback_ids?.[0].id;
 
