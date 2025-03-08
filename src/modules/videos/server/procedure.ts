@@ -14,11 +14,294 @@ import {
   protectedProcedure,
 } from "@/trpc/init";
 import { TRPCError } from "@trpc/server";
-import { and, eq, getTableColumns, inArray, isNotNull } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  getTableColumns,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+} from "drizzle-orm";
 import { UTApi } from "uploadthing/server";
 import { z } from "zod";
 
 export const videosRouter = createTRPCRouter({
+  getTrending: baseProcedure
+    .input(
+      z.object({
+        cursor: z
+          .object({
+            id: z.string().uuid(),
+            viewCount: z.number(),
+          })
+          .nullish(),
+        limit: z.number().min(1).max(100),
+      })
+    )
+    .query(async ({ input }) => {
+      // Destructure pagination parameters from input
+      const { cursor, limit } = input;
+      // Get current user's ID from context
+      const viewCountSubquery = db.$count(
+        videoViews,
+        eq(videoViews.videoId, videos.id)
+      );
+      const data = await db
+        .select({
+          ...getTableColumns(videos),
+          user: users,
+
+          viewCount: viewCountSubquery,
+          likeCount: db.$count(
+            videoReactions,
+            and(
+              eq(videoReactions.videoId, videos.id),
+              eq(videoReactions.type, "like")
+            )
+          ),
+          dislike: db.$count(
+            videoReactions,
+            and(
+              eq(videoReactions.videoId, videos.id),
+              eq(videoReactions.type, "dislike")
+            )
+          ),
+        })
+        .from(videos)
+        .innerJoin(users, eq(videos.userId, users.id))
+        .where(
+          and(
+            // Only show videos belonging to current user
+            eq(videos.visibility, "public"),
+            // If cursor exists, apply pagination conditions
+            cursor
+              ? or(
+                  // Condition 1: Get videos updated before cursor's timestamp means 3:00PM and earlier
+                  lt(viewCountSubquery, cursor.viewCount),
+
+                  // Condition 2: Get videos with same timestamp but lower ID
+                  and(
+                    // Same timestamp as cursor means at 3:00PM and with smaller id
+                    eq(viewCountSubquery, cursor.viewCount),
+                    // But ID must be less than cursor's ID
+                    lt(videos.id, cursor.id)
+                  )
+                )
+              : undefined // If no cursor, get first page
+          )
+        )
+        // Sort by newest first, then by ID for stable ordering
+        .orderBy(desc(viewCountSubquery), desc(videos.id))
+        // Get one extra item to determine if there's a next page
+        .limit(limit + 1);
+
+      // Check if there are more items beyond this page
+      const hasMore = data.length > limit;
+      // Remove the extra item if we fetched more than limit
+      const items = hasMore ? data.slice(0, -1) : data;
+
+      // Get the last item for creating the next cursor
+      const lastItem = items[items.length - 1];
+
+      // Create cursor for next page if there are more items
+      const nextCursor = hasMore
+        ? {
+            id: lastItem.id,
+            viewCount: lastItem.viewCount,
+          }
+        : null; // No cursor if this is the last page
+
+      // Return both the items and the cursor for the next page
+      return { items, nextCursor };
+    }),
+  getMany: baseProcedure
+    .input(
+      z.object({
+        query: z.string().nullish(),
+        categoryId: z.string().nullish(),
+        cursor: z
+          .object({
+            id: z.string().uuid(),
+            updatedAt: z.date(),
+          })
+          .nullish(),
+        limit: z.number().min(1).max(100),
+      })
+    )
+    .query(async ({ input }) => {
+      // Destructure pagination parameters from input
+      const { cursor, limit, categoryId } = input;
+      // Get current user's ID from context
+
+      const data = await db
+        .select({
+          ...getTableColumns(videos),
+          user: users,
+
+          viewCount: db.$count(videoViews, eq(videoViews.videoId, videos.id)),
+          likeCount: db.$count(
+            videoReactions,
+            and(
+              eq(videoReactions.videoId, videos.id),
+              eq(videoReactions.type, "like")
+            )
+          ),
+          dislike: db.$count(
+            videoReactions,
+            and(
+              eq(videoReactions.videoId, videos.id),
+              eq(videoReactions.type, "dislike")
+            )
+          ),
+        })
+        .from(videos)
+        .innerJoin(users, eq(videos.userId, users.id))
+        .where(
+          and(
+            // Only show videos belonging to current user
+            eq(videos.visibility, "public"),
+            categoryId ? eq(videos.categoryId, categoryId) : undefined,
+            // If cursor exists, apply pagination conditions
+            cursor
+              ? or(
+                  // Condition 1: Get videos updated before cursor's timestamp means 3:00PM and earlier
+                  lt(videos.updatedAt, cursor.updatedAt),
+
+                  // Condition 2: Get videos with same timestamp but lower ID
+                  and(
+                    // Same timestamp as cursor means at 3:00PM and with smaller id
+                    eq(videos.updatedAt, cursor.updatedAt),
+                    // But ID must be less than cursor's ID
+                    lt(videos.id, cursor.id)
+                  )
+                )
+              : undefined // If no cursor, get first page
+          )
+        )
+        // Sort by newest first, then by ID for stable ordering
+        .orderBy(desc(videos.updatedAt), desc(videos.id))
+        // Get one extra item to determine if there's a next page
+        .limit(limit + 1);
+
+      // Check if there are more items beyond this page
+      const hasMore = data.length > limit;
+      // Remove the extra item if we fetched more than limit
+      const items = hasMore ? data.slice(0, -1) : data;
+
+      // Get the last item for creating the next cursor
+      const lastItem = items[items.length - 1];
+
+      // Create cursor for next page if there are more items
+      const nextCursor = hasMore
+        ? {
+            id: lastItem.id,
+            updatedAt: lastItem.updatedAt,
+          }
+        : null; // No cursor if this is the last page
+
+      // Return both the items and the cursor for the next page
+      return { items, nextCursor };
+    }),
+  getManySubscribed: protectedProcedure
+    .input(
+      z.object({
+        cursor: z
+          .object({
+            id: z.string().uuid(),
+            updatedAt: z.date(),
+          })
+          .nullish(),
+        limit: z.number().min(1).max(100),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      // Destructure pagination parameters from input
+      const { id: userId } = ctx.user;
+      const { cursor, limit } = input;
+      // Get current user's ID from context
+
+      const viewerSubscriptions = db.$with("viewer_subscription").as(
+        db
+          .select({
+            userId: subscriptions.creatorId,
+          })
+          .from(subscriptions)
+          .where(eq(subscriptions.viewerId, userId))
+      );
+      const data = await db
+        .with(viewerSubscriptions)
+        .select({
+          ...getTableColumns(videos),
+          user: users,
+          viewCount: db.$count(videoViews, eq(videoViews.videoId, videos.id)),
+          likeCount: db.$count(
+            videoReactions,
+            and(
+              eq(videoReactions.videoId, videos.id),
+              eq(videoReactions.type, "like")
+            )
+          ),
+          dislike: db.$count(
+            videoReactions,
+            and(
+              eq(videoReactions.videoId, videos.id),
+              eq(videoReactions.type, "dislike")
+            )
+          ),
+        })
+        .from(videos)
+        .innerJoin(users, eq(videos.userId, users.id))
+        .innerJoin(
+          viewerSubscriptions,
+          eq(viewerSubscriptions.userId, users.id)
+        )
+        .where(
+          and(
+            // Only show videos belonging to current user
+            eq(videos.visibility, "public"),
+            // If cursor exists, apply pagination conditions
+            cursor
+              ? or(
+                  // Condition 1: Get videos updated before cursor's timestamp means 3:00PM and earlier
+                  lt(videos.updatedAt, cursor.updatedAt),
+
+                  // Condition 2: Get videos with same timestamp but lower ID
+                  and(
+                    // Same timestamp as cursor means at 3:00PM and with smaller id
+                    eq(videos.updatedAt, cursor.updatedAt),
+                    // But ID must be less than cursor's ID
+                    lt(videos.id, cursor.id)
+                  )
+                )
+              : undefined // If no cursor, get first page
+          )
+        )
+        // Sort by newest first, then by ID for stable ordering
+        .orderBy(desc(videos.updatedAt), desc(videos.id))
+        // Get one extra item to determine if there's a next page
+        .limit(limit + 1);
+
+      // Check if there are more items beyond this page
+      const hasMore = data.length > limit;
+      // Remove the extra item if we fetched more than limit
+      const items = hasMore ? data.slice(0, -1) : data;
+
+      // Get the last item for creating the next cursor
+      const lastItem = items[items.length - 1];
+
+      // Create cursor for next page if there are more items
+      const nextCursor = hasMore
+        ? {
+            id: lastItem.id,
+            updatedAt: lastItem.updatedAt,
+          }
+        : null; // No cursor if this is the last page
+
+      // Return both the items and the cursor for the next page
+      return { items, nextCursor };
+    }),
   getOne: baseProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ input, ctx }) => {
