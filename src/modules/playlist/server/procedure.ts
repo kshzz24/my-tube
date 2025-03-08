@@ -1,10 +1,112 @@
 import { db } from "@/db";
-import { users, videoReactions, videos, videoViews } from "@/db/schema";
+import {
+  playlists,
+  playlistVideos,
+  users,
+  videoReactions,
+  videos,
+  videoViews,
+} from "@/db/schema";
 import { createTRPCRouter, protectedProcedure } from "@/trpc/init";
+import { TRPCError } from "@trpc/server";
 import { and, desc, eq, getTableColumns, lt, or } from "drizzle-orm";
 import { z } from "zod";
 
 export const playlistRouter = createTRPCRouter({
+  create: protectedProcedure
+    .input(z.object({ name: z.string().min(1) }))
+    .mutation(async ({ input, ctx }) => {
+      const { name } = input;
+      const { id: userId } = ctx.user;
+
+      const [createdPlaylist] = await db
+        .insert(playlists)
+        .values({
+          userId,
+          name,
+        })
+        .returning();
+
+      if (!createdPlaylist) {
+        throw new TRPCError({ code: "BAD_REQUEST" });
+      }
+      return createdPlaylist;
+    }),
+  getMany: protectedProcedure
+    .input(
+      z.object({
+        cursor: z
+          .object({
+            id: z.string().uuid(),
+            updatedAt: z.date(),
+          })
+          .nullish(),
+        limit: z.number().min(1).max(100),
+      })
+    )
+    .query(async ({ input, ctx }) => {
+      // Destructure pagination parameters from input
+      const { cursor, limit } = input;
+      const { id: userId } = ctx.user;
+      // Get current user's ID from context
+
+      const data = await db
+
+        .select({
+          ...getTableColumns(playlists),
+          videoCount: db.$count(
+            playlistVideos,
+            eq(playlists.id, playlistVideos.playlistId)
+          ),
+          user: users,
+        })
+        .from(playlists)
+        .innerJoin(users, eq(playlists.userId, users.id))
+        .where(
+          and(
+            // Only show videos belonging to current user
+            eq(playlists.userId, userId),
+            // If cursor exists, apply pagination conditions
+            cursor
+              ? or(
+                  // Condition 1: Get videos updated before cursor's timestamp means 3:00PM and earlier
+                  lt(playlists.updatedAt, cursor.updatedAt),
+
+                  // Condition 2: Get videos with same timestamp but lower ID
+                  and(
+                    // Same timestamp as cursor means at 3:00PM and with smaller id
+                    eq(playlists.updatedAt, cursor.updatedAt),
+                    // But ID must be less than cursor's ID
+                    lt(playlists.id, cursor.id)
+                  )
+                )
+              : undefined // If no cursor, get first page
+          )
+        )
+        // Sort by newest first, then by ID for stable ordering
+        .orderBy(desc(playlists.updatedAt), desc(playlists.id))
+        // Get one extra item to determine if there's a next page
+        .limit(limit + 1);
+
+      // Check if there are more items beyond this page
+      const hasMore = data.length > limit;
+      // Remove the extra item if we fetched more than limit
+      const items = hasMore ? data.slice(0, -1) : data;
+
+      // Get the last item for creating the next cursor
+      const lastItem = items[items.length - 1];
+
+      // Create cursor for next page if there are more items
+      const nextCursor = hasMore
+        ? {
+            id: lastItem.id,
+            updatedAt: lastItem.updatedAt,
+          }
+        : null; // No cursor if this is the last page
+
+      // Return both the items and the cursor for the next page
+      return { items, nextCursor };
+    }),
   getHistory: protectedProcedure
     .input(
       z.object({
