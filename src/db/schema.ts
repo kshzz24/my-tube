@@ -24,6 +24,8 @@ export const users = pgTable(
     clerkId: text("clerk_id").unique().notNull(),
     name: text("name").notNull(),
     // add a  new field
+    bannerUrl: text("banner_url"),
+    bannerKey: text("banner_key"),
     imageUrl: text("image_url").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -120,6 +120,7 @@ export const videosRouter = createTRPCRouter({
     .input(
       z.object({
         query: z.string().nullish(),
+        userId: z.string().nullish(),
         categoryId: z.string().nullish(),
         cursor: z
           .object({
@@ -132,7 +133,7 @@ export const videosRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       // Destructure pagination parameters from input
-      const { cursor, limit, categoryId } = input;
+      const { cursor, limit, categoryId, userId } = input;
       // Get current user's ID from context
 
       const data = await db
@@ -162,7 +163,9 @@ export const videosRouter = createTRPCRouter({
           and(
             // Only show videos belonging to current user
             eq(videos.visibility, "public"),
+            userId ? eq(videos.userId, userId) : undefined,
             categoryId ? eq(videos.categoryId, categoryId) : undefined,
+
             // If cursor exists, apply pagination conditions
             cursor
               ? or(
