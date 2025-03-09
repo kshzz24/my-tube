@@ -99,6 +99,9 @@
     "cmdk": {
       "react": "$react",
       "react-dom": "$react-dom"
+    },
+    "react-day-picker": {
+      "date-fns": "$date-fns"
     }
   }
 }
