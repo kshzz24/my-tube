@@ -7,6 +7,7 @@ interface PageProps {
     userId: string;
   }>;
 }
+export const dynamic = "force-dynamic";
 
 const Page = async ({ params }: PageProps) => {
   const { userId } = await params;

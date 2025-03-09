@@ -113,6 +113,7 @@ const VideosSectionSuspense = () => {
               .flatMap((page) => page.items)
               .map((video) => (
                 <Link
+                  prefetch
                   key={video.id}
                   href={`/studio/videos/${video.id}`}
                   legacyBehavior
@@ -156,7 +157,9 @@ const VideosSectionSuspense = () => {
                     <TableCell>
                       {format(new Date(video.createdAt), "d /MMM/ yyyy")}
                     </TableCell>
-                    <TableCell className="text-right text-sm">{video.viewCount}</TableCell>
+                    <TableCell className="text-right text-sm">
+                      {video.viewCount}
+                    </TableCell>
                     <TableCell className="text-right text-sm">
                       {video.commentCount}
                     </TableCell>
