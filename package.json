@@ -94,5 +94,11 @@
     "tailwindcss": "^3.4.1",
     "tsx": "4.19.2",
     "typescript": "^5"
+  },
+  "overrides": {
+    "cmdk": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   }
 }
